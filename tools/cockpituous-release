@@ -19,7 +19,7 @@ RELEASE_DSC=$PWD/_release/dsc
 RELEASE_SOURCE=$PWD/_release/source
 
 # Authenticate for pushing into Fedora dist-git
-cat ~/.fedora-password | kinit cockpit@FEDORAPROJECT.ORG
+# cat ~/.fedora-password | kinit cockpit@FEDORAPROJECT.ORG
 
 # Build the source tarball patches and srpm
 job release-source
