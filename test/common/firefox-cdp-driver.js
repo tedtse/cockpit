@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/home/xiepeng/.nvm/versions/node/v12.22.1/bin node
 
 /*
  * This file is part of Cockpit.
@@ -28,14 +28,13 @@
  * frame/execution context debugging.
  */
 
-const CDP = require('chrome-remote-interface');
+const CDP = require("chrome-remote-interface");
 
 var enable_debug = false;
 var the_client = null;
 
 function debug(msg) {
-    if (enable_debug)
-        process.stderr.write("CDP: " + msg + "\n");
+  if (enable_debug) process.stderr.write("CDP: " + msg + "\n");
 }
 
 /**
@@ -43,20 +42,18 @@ function debug(msg) {
  */
 
 function fatal() {
-    console.error.apply(console.error, arguments);
-    process.exit(1);
+  console.error.apply(console.error, arguments);
+  process.exit(1);
 }
 
 function fail(err) {
-    if (typeof err === 'undefined')
-        err = null;
-    process.stdout.write(JSON.stringify({"error": err}) + '\n');
+  if (typeof err === "undefined") err = null;
+  process.stdout.write(JSON.stringify({ error: err }) + "\n");
 }
 
 function success(result) {
-    if (typeof result === 'undefined')
-        result = null;
-    process.stdout.write(JSON.stringify({"result": result}) + '\n');
+  if (typeof result === "undefined") result = null;
+  process.stdout.write(JSON.stringify({ result: result }) + "\n");
 }
 
 /**
@@ -70,102 +67,108 @@ var unhandledExceptions = [];
 var shownMessages = []; // Show every message just once, keep here seen messages
 
 function clearExceptions() {
-    unhandledExceptions.length = 0;
-    return Promise.resolve();
+  unhandledExceptions.length = 0;
+  return Promise.resolve();
 }
 
 function setupLogging(client) {
-    client.Runtime.enable();
+  client.Runtime.enable();
 
-    client.Runtime.consoleAPICalled(info => {
-        let msg = info.args.map(v => (v.value || "").toString()).join(" ");
-        messages.push([ info.type, msg ]);
-        if (shownMessages.indexOf(msg) == -1) {
-            shownMessages.push(msg);
-            process.stderr.write("> " + info.type + ": " + msg + "\n")
-        }
-
-        resolveLogPromise();
-    });
-
-    function processException(info) {
-        let details = info.exceptionDetails;
-        if (details.exception)
-            details = details.exception;
-
-        // don't log test timeouts, they already get handled
-        if (details.className === "PhWaitCondTimeout")
-            return;
-
-        // HACK: Sometimes on Firefox >= 77 xterm.js can raise following message when Cockpit is reloaded:
-        // `InvalidStateError: An attempt was made to use an object that is not, or is no longer, usable`
-        // It does not oops, everything is functional, safe to ignore for now
-        if (details.className === "InvalidStateError")
-            return;
-
-        process.stderr.write(details.description || details.text || JSON.stringify(details) + "\n");
-
-        unhandledExceptions.push(details.message ||
-                                 details.description ||
-                                 details.value ||
-                                 JSON.stringify(details));
+  client.Runtime.consoleAPICalled((info) => {
+    let msg = info.args.map((v) => (v.value || "").toString()).join(" ");
+    messages.push([info.type, msg]);
+    if (shownMessages.indexOf(msg) == -1) {
+      shownMessages.push(msg);
+      process.stderr.write("> " + info.type + ": " + msg + "\n");
     }
 
-    client.Runtime.exceptionThrown(info => processException(info));
+    resolveLogPromise();
+  });
 
-    client.Log.enable();
-    client.Log.entryAdded(entry => {
-        // HACK: Firefox does not implement `Runtime.exceptionThrown` but logs it
-        // Lets parse it to have at least some basic check that code did not throw
-        // exception
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=1549528
+  function processException(info) {
+    let details = info.exceptionDetails;
+    if (details.exception) details = details.exception;
 
-        let msg = entry["entry"];
-        let text = msg.text;
-        if (typeof text !== "string")
-            if (text[0] && typeof text[0] === "string")
-                text = text[0];
+    // don't log test timeouts, they already get handled
+    if (details.className === "PhWaitCondTimeout") return;
 
-        if (msg.stackTrace !== undefined &&
-            typeof text === "string" &&
-            text.indexOf("Error: ") !== -1) {
-            trace = text.split(": ", 1);
-            processException({exceptionDetails: {
-                exception: {
-                    className: trace[0],
-                    message: trace.length > 1 ? trace[1] : "",
-                    stacktrace: msg.stackTrace,
-                    entry: msg,
-                },
-            }
-            });
-        } else {
-            messages.push([ "cdp", msg ]);
-            /* Ignore authentication failure log lines that don't denote failures */
-            if (!(msg.url || "").endsWith("/login") || (text || "").indexOf("401") === -1) {
-                const orig = {...msg};
-                delete msg.timestamp;
-                delete msg.args;
-                const msgstr = JSON.stringify(msg);
-                if (shownMessages.indexOf(msgstr) == -1) {
-                    shownMessages.push(msgstr);
-                    process.stderr.write("CDP: " + JSON.stringify(orig) + "\n");
-                }
-            }
-            resolveLogPromise();
+    // HACK: Sometimes on Firefox >= 77 xterm.js can raise following message when Cockpit is reloaded:
+    // `InvalidStateError: An attempt was made to use an object that is not, or is no longer, usable`
+    // It does not oops, everything is functional, safe to ignore for now
+    if (details.className === "InvalidStateError") return;
+
+    process.stderr.write(
+      details.description || details.text || JSON.stringify(details) + "\n"
+    );
+
+    unhandledExceptions.push(
+      details.message ||
+        details.description ||
+        details.value ||
+        JSON.stringify(details)
+    );
+  }
+
+  client.Runtime.exceptionThrown((info) => processException(info));
+
+  client.Log.enable();
+  client.Log.entryAdded((entry) => {
+    // HACK: Firefox does not implement `Runtime.exceptionThrown` but logs it
+    // Lets parse it to have at least some basic check that code did not throw
+    // exception
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1549528
+
+    let msg = entry["entry"];
+    let text = msg.text;
+    if (typeof text !== "string")
+      if (text[0] && typeof text[0] === "string") text = text[0];
+
+    if (
+      msg.stackTrace !== undefined &&
+      typeof text === "string" &&
+      text.indexOf("Error: ") !== -1
+    ) {
+      trace = text.split(": ", 1);
+      processException({
+        exceptionDetails: {
+          exception: {
+            className: trace[0],
+            message: trace.length > 1 ? trace[1] : "",
+            stacktrace: msg.stackTrace,
+            entry: msg,
+          },
+        },
+      });
+    } else {
+      messages.push(["cdp", msg]);
+      /* Ignore authentication failure log lines that don't denote failures */
+      if (
+        !(msg.url || "").endsWith("/login") ||
+        (text || "").indexOf("401") === -1
+      ) {
+        const orig = { ...msg };
+        delete msg.timestamp;
+        delete msg.args;
+        const msgstr = JSON.stringify(msg);
+        if (shownMessages.indexOf(msgstr) == -1) {
+          shownMessages.push(msgstr);
+          process.stderr.write("CDP: " + JSON.stringify(orig) + "\n");
         }
-    });
+      }
+      resolveLogPromise();
+    }
+  });
 }
 
 /**
  * Resolve the log promise created with waitLog().
  */
 function resolveLogPromise() {
-    if (logPromiseResolver) {
-        logPromiseResolver(messages.slice(nReportedLogMessages));
-        nReportedLogMessages = messages.length;
-        logPromiseResolver = undefined;
-    }
+  if (logPromiseResolver) {
+    logPromiseResolver(messages.slice(nReportedLogMessages));
+    nReportedLogMessages = messages.length;
+    logPromiseResolver = undefined;
+  }
 }
 
 /**
@@ -177,14 +180,13 @@ function resolveLogPromise() {
  * resolved, this function can be called again to wait for further messages.
  */
 function waitLog() {
-    console.assert(logPromiseResolver === undefined);
+  console.assert(logPromiseResolver === undefined);
 
-    return new Promise((resolve, reject) => {
-        logPromiseResolver = resolve;
+  return new Promise((resolve, reject) => {
+    logPromiseResolver = resolve;
 
-        if (nReportedLogMessages < messages.length)
-            resolveLogPromise();
-    });
+    if (nReportedLogMessages < messages.length) resolveLogPromise();
+  });
 }
 
 /**
@@ -211,92 +213,100 @@ var pageLoadResolve = null;
 var pageLoadReject = null;
 
 function setupFrameTracking(client) {
-    client.Page.enable();
+  client.Page.enable();
 
-    // map frame names to frame IDs; root frame has no name, no need to track that
-    client.Page.frameNavigated(info => {
-        debug("frameNavigated " + JSON.stringify(info));
-        frameNameToFrameId[info.frame.name || "cockpit1"] = info.frame.id;
+  // map frame names to frame IDs; root frame has no name, no need to track that
+  client.Page.frameNavigated((info) => {
+    debug("frameNavigated " + JSON.stringify(info));
+    frameNameToFrameId[info.frame.name || "cockpit1"] = info.frame.id;
 
-        // were we waiting for this frame to be loaded?
-        if (frameWaitPromiseResolve && frameWaitName === info.frame.name) {
-            frameWaitPromiseResolve();
-            frameWaitPromiseResolve = null;
-        }
+    // were we waiting for this frame to be loaded?
+    if (frameWaitPromiseResolve && frameWaitName === info.frame.name) {
+      frameWaitPromiseResolve();
+      frameWaitPromiseResolve = null;
+    }
+  });
+
+  client.Page.loadEventFired(() => {
+    if (pageLoadResolve) {
+      debug("loadEventFired (waited for)");
+      pageLoadResolve();
+      pageLoadResolve = null;
+      pageLoadReject = null;
+    } else {
+      debug("loadEventFired (no listener)");
+    }
+  });
+
+  // track execution contexts so that we can map between context and frame IDs
+  client.Runtime.executionContextCreated((info) => {
+    debug("executionContextCreated " + JSON.stringify(info));
+    frameIdToContextId[info.context.auxData.frameId] = info.context.id;
+    scriptsOnNewContext.forEach((s) => {
+      client.Runtime.evaluate({ expression: s, contextId: info.context.id });
     });
+  });
 
-    client.Page.loadEventFired(() => {
-        if (pageLoadResolve) {
-            debug("loadEventFired (waited for)");
-            pageLoadResolve();
-            pageLoadResolve = null;
-            pageLoadReject = null;
-        } else {
-            debug("loadEventFired (no listener)");
-        }
-    });
-
-    // track execution contexts so that we can map between context and frame IDs
-    client.Runtime.executionContextCreated(info => {
-        debug("executionContextCreated " + JSON.stringify(info));
-        frameIdToContextId[info.context.auxData.frameId] = info.context.id;
-        scriptsOnNewContext.forEach(s => {
-            client.Runtime.evaluate({expression: s, contextId:info.context.id});
-        });
-    });
-
-    client.Runtime.executionContextDestroyed(info => {
-        debug("executionContextDestroyed " + info.executionContextId);
-        for (let frameId in frameIdToContextId) {
-            if (frameIdToContextId[frameId] == info.executionContextId) {
-                delete frameIdToContextId[frameId];
-                break;
-            }
-        }
-    });
+  client.Runtime.executionContextDestroyed((info) => {
+    debug("executionContextDestroyed " + info.executionContextId);
+    for (let frameId in frameIdToContextId) {
+      if (frameIdToContextId[frameId] == info.executionContextId) {
+        delete frameIdToContextId[frameId];
+        break;
+      }
+    }
+  });
 }
 
 // helper functions for testlib.py which are too unwieldy to be poked in from Python
 function getFrameExecId(frame) {
-    if (frame === null)
-        frame = "cockpit1";
-    var frameId = frameNameToFrameId[frame];
-    if (!frameId)
-        throw Error(`Frame ${frame} is unknown`);
-    var execId = frameIdToContextId[frameId];
-    if (!execId)
-        throw Error(`Frame ${frame} (${frameId}) has no executionContextId`);
-    return execId;
+  if (frame === null) frame = "cockpit1";
+  var frameId = frameNameToFrameId[frame];
+  if (!frameId) throw Error(`Frame ${frame} is unknown`);
+  var execId = frameIdToContextId[frameId];
+  if (!execId)
+    throw Error(`Frame ${frame} (${frameId}) has no executionContextId`);
+  return execId;
 }
 
 function expectLoad(timeout) {
-    var tm = setTimeout( () => pageLoadReject("timed out waiting for page load"), timeout);
-    pageLoadPromise.then( () => { clearTimeout(tm); pageLoadPromise = null; });
-    return pageLoadPromise;
+  var tm = setTimeout(
+    () => pageLoadReject("timed out waiting for page load"),
+    timeout
+  );
+  pageLoadPromise.then(() => {
+    clearTimeout(tm);
+    pageLoadPromise = null;
+  });
+  return pageLoadPromise;
 }
 
 function expectLoadFrame(name, timeout) {
-    return new Promise((resolve, reject) => {
-        let tm = setTimeout( () => reject("timed out waiting for frame load"), timeout );
+  return new Promise((resolve, reject) => {
+    let tm = setTimeout(
+      () => reject("timed out waiting for frame load"),
+      timeout
+    );
 
-        // we can only have one Page.frameNavigated() handler, so let our handler above resolve this promise
-        frameWaitName = name;
-        new Promise((fwpResolve, fwpReject) => { frameWaitPromiseResolve = fwpResolve })
-            .then(() => {
-                // For the frame to be fully valid for queries, it also needs the corresponding
-                // executionContextCreated() signal. This might happen before or after frameNavigated(), so wait in case
-                // it happens afterwards.
-               function pollExecId() {
-                    if (frameIdToContextId[frameNameToFrameId[name]]) {
-                        clearTimeout(tm);
-                        resolve();
-                    } else {
-                        setTimeout(pollExecId, 100);
-                    }
-                }
-                pollExecId();
-            });
+    // we can only have one Page.frameNavigated() handler, so let our handler above resolve this promise
+    frameWaitName = name;
+    new Promise((fwpResolve, fwpReject) => {
+      frameWaitPromiseResolve = fwpResolve;
+    }).then(() => {
+      // For the frame to be fully valid for queries, it also needs the corresponding
+      // executionContextCreated() signal. This might happen before or after frameNavigated(), so wait in case
+      // it happens afterwards.
+      function pollExecId() {
+        if (frameIdToContextId[frameNameToFrameId[name]]) {
+          clearTimeout(tm);
+          resolve();
+        } else {
+          setTimeout(pollExecId, 100);
+        }
+      }
+      pollExecId();
     });
+  });
 }
 
 /**
@@ -307,18 +317,17 @@ function expectLoadFrame(name, timeout) {
  *    fail <JSON formatted error>
  * EOF shuts down the client.
  */
-process.stdin.setEncoding('utf8');
+process.stdin.setEncoding("utf8");
 
-if (process.env["TEST_CDP_DEBUG"])
-    enable_debug = true;
+if (process.env["TEST_CDP_DEBUG"]) enable_debug = true;
 
-options = { };
+options = {};
 if (process.argv.length >= 3) {
-    options.port = parseInt(process.argv[2]);
-    if (!options.port) {
-        process.stderr.write("Usage: firefox-cdp-driver.js [port]\n");
-        process.exit(1);
-    }
+  options.port = parseInt(process.argv[2]);
+  if (!options.port) {
+    process.stderr.write("Usage: firefox-cdp-driver.js [port]\n");
+    process.exit(1);
+  }
 }
 
 // HACK: `addScriptToEvaluateOnNewDocument` is not implemented in Firefox
@@ -326,10 +335,10 @@ if (process.argv.length >= 3) {
 // scripts in them
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1549465
 function addScriptToEvaluateOnNewDocument(script) {
-    return new Promise((resolve, reject) => {
-        scriptsOnNewContext.push(script.source);
-        resolve();
-    });
+  return new Promise((resolve, reject) => {
+    scriptsOnNewContext.push(script.source);
+    resolve();
+  });
 }
 
 // This should work on different targets (meaning tabs)
@@ -348,59 +357,72 @@ function addScriptToEvaluateOnNewDocument(script) {
 // Just calling executable to open another tab in the same browser works also for chromium, so
 // should be fine
 CDP(options)
-    .then(client => {
-        the_client = client;
-        setupLogging(client);
-        setupFrameTracking(client);
-        // TODO: Security handling not yet supported in Firefox
+  .then((client) => {
+    the_client = client;
+    setupLogging(client);
+    setupFrameTracking(client);
+    // TODO: Security handling not yet supported in Firefox
 
-        let input_buf = '';
-        process.stdin
-            .on('data', chunk => {
-                input_buf += chunk;
-                while (true) {
-                    let i = input_buf.indexOf('\n');
-                    if (i < 0)
-                        break;
-                    let command = input_buf.slice(0, i);
+    let input_buf = "";
+    process.stdin
+      .on("data", (chunk) => {
+        input_buf += chunk;
+        while (true) {
+          let i = input_buf.indexOf("\n");
+          if (i < 0) break;
+          let command = input_buf.slice(0, i);
 
-                    // initialize loadEventFired promise for every command except expectLoad() itself (as that
-                    // waits for a load event from the *previous* command); but if the previous command already
-                    // was an expectLoad(), reinitialize also, as there are sometimes two consecutive expectLoad()s
-                    if (!pageLoadPromise || !command.startsWith("expectLoad("))
-                        pageLoadPromise = new Promise((resolve, reject) => { pageLoadResolve = resolve; pageLoadReject = reject; });
+          // initialize loadEventFired promise for every command except expectLoad() itself (as that
+          // waits for a load event from the *previous* command); but if the previous command already
+          // was an expectLoad(), reinitialize also, as there are sometimes two consecutive expectLoad()s
+          if (!pageLoadPromise || !command.startsWith("expectLoad("))
+            pageLoadPromise = new Promise((resolve, reject) => {
+              pageLoadResolve = resolve;
+              pageLoadReject = reject;
+            });
 
-                    // HACKS: See description of related functions
-                    if (command.startsWith("client.Page.addScriptToEvaluateOnNewDocument"))
-                        command = command.substring(12);
+          // HACKS: See description of related functions
+          if (
+            command.startsWith("client.Page.addScriptToEvaluateOnNewDocument")
+          )
+            command = command.substring(12);
 
-                    // run the command
-                    eval(command).then(reply => {
-                        if (unhandledExceptions.length === 0) {
-                            success(reply);
-                        } else {
-                            let message = unhandledExceptions[0];
-                            fail(message.split("\n")[0]);
-                            clearExceptions();
-                        }
-                    }, err => {
-                        // HACK: Runtime.evaluate() fails with "Debugger: expected Debugger.Object, got Proxy"
-                        // translate that into a proper timeout exception
-                        if (err.response && err.response.data && err.response.data.indexOf("setTimeout handler*ph_wait_cond") > 0) {
-                            success({exceptionDetails: {
-                                exception: {
-                                    type: "string",
-                                    value: "timeout",
-                                }
-                            }});
-                        } else
-                            fail(err);
-                    });
+          // run the command
+          eval(command).then(
+            (reply) => {
+              if (unhandledExceptions.length === 0) {
+                success(reply);
+              } else {
+                let message = unhandledExceptions[0];
+                fail(message.split("\n")[0]);
+                clearExceptions();
+              }
+            },
+            (err) => {
+              // HACK: Runtime.evaluate() fails with "Debugger: expected Debugger.Object, got Proxy"
+              // translate that into a proper timeout exception
+              if (
+                err.response &&
+                err.response.data &&
+                err.response.data.indexOf("setTimeout handler*ph_wait_cond") > 0
+              ) {
+                success({
+                  exceptionDetails: {
+                    exception: {
+                      type: "string",
+                      value: "timeout",
+                    },
+                  },
+                });
+              } else fail(err);
+            }
+          );
 
-                    input_buf = input_buf.slice(i+1);
-                }
-
-            })
-           .on('end', () => { process.exit(0) });
-    })
-    .catch(fatal);
+          input_buf = input_buf.slice(i + 1);
+        }
+      })
+      .on("end", () => {
+        process.exit(0);
+      });
+  })
+  .catch(fatal);

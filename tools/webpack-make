@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/home/xiepeng/.nvm/versions/node/v12.22.1/bin node
 
 /*
  * Builds with webpack and generates a Makefile include that
@@ -12,17 +12,31 @@ const fs = require("fs");
 const child_process = require("child_process");
 
 const ops = stdio.getopt({
-    config: { key: "c", args: 1, description: "Path to webpack.config.js", default: "webpack.config.js" },
-    deps: { key: "d", args: 1, description: "Output dependencies in Makefile format" },
-    rsync: { key: "r", args: 1, description: "rsync webpack to ssh target after build", default: "" },
-    watch: { key: "w", args: 0, description: "Enable webpack watch mode" },
+  config: {
+    key: "c",
+    args: 1,
+    description: "Path to webpack.config.js",
+    default: "webpack.config.js",
+  },
+  deps: {
+    key: "d",
+    args: 1,
+    description: "Output dependencies in Makefile format",
+  },
+  rsync: {
+    key: "r",
+    args: 1,
+    description: "rsync webpack to ssh target after build",
+    default: "",
+  },
+  watch: { key: "w", args: 0, description: "Enable webpack watch mode" },
 });
 
 const makefile = ops.deps;
 const prefix = makefile.split("/").slice(-2, -1)[0];
 process.env["ONLYDIR"] = prefix + "/";
 
-const srcdir = (process.env.SRCDIR || ".").replace(/\/$/, '');
+const srcdir = (process.env.SRCDIR || ".").replace(/\/$/, "");
 const cwd = process.cwd();
 const config_path = path.resolve(cwd, ops.config);
 const config = require(config_path);
@@ -30,146 +44,154 @@ const config = require(config_path);
 const compiler = webpack(config);
 
 if (ops.watch) {
-    compiler.hooks.watchRun.tap("WebpackInfo", compilation => {
-        const time = new Date().toTimeString().split(' ')[0];
-        process.stdout.write(`${ time  } Build started\n`);
-    });
-    compiler.watch(config.watchOptions, process_result);
+  compiler.hooks.watchRun.tap("WebpackInfo", (compilation) => {
+    const time = new Date().toTimeString().split(" ")[0];
+    process.stdout.write(`${time} Build started\n`);
+  });
+  compiler.watch(config.watchOptions, process_result);
 } else {
-    compiler.run(process_result);
+  compiler.run(process_result);
 }
 
 function process_result(err, stats) {
-    // process.stdout.write(stats.toString({colors: true}) + "\n");
+  // process.stdout.write(stats.toString({colors: true}) + "\n");
 
-    if (err) {
-        console.log(JSON.stringify(err));
-        process.exit(1);
-        return;
-    }
+  if (err) {
+    console.log(JSON.stringify(err));
+    process.exit(1);
+    return;
+  }
 
-    if (ops.watch) {
-        const info = stats.toJson();
-        const time = new Date().toTimeString().split(' ')[0];
-        process.stdout.write(`${ time  } Build succeeded, took ${ info.time/1000 }s\n`);
-    }
+  if (ops.watch) {
+    const info = stats.toJson();
+    const time = new Date().toTimeString().split(" ")[0];
+    process.stdout.write(
+      `${time} Build succeeded, took ${info.time / 1000}s\n`
+    );
+  }
 
-    // Failure exit code when compilation fails
-    if (stats.hasErrors() || stats.hasWarnings())
-        console.log(stats.toString("normal"));
+  // Failure exit code when compilation fails
+  if (stats.hasErrors() || stats.hasWarnings())
+    console.log(stats.toString("normal"));
 
-    if (stats.hasErrors()) {
-        if (!ops.watch)
-            process.exit(1);
-        return;
-    }
+  if (stats.hasErrors()) {
+    if (!ops.watch) process.exit(1);
+    return;
+  }
 
-    if (ops.rsync)
-        rsync();
+  if (ops.rsync) rsync();
 
-    generateDeps(makefile, stats);
+  generateDeps(makefile, stats);
 }
 
 function generateDeps(makefile, stats) {
-    const stampfile = path.dirname(makefile) + '/manifest.json';
-    const dir = path.relative('', stats.compilation.outputOptions.path);
-    const now = Math.floor(Date.now() / 1000);
+  const stampfile = path.dirname(makefile) + "/manifest.json";
+  const dir = path.relative("", stats.compilation.outputOptions.path);
+  const now = Math.floor(Date.now() / 1000);
 
-    const inputs = new Set();
-    for (const file of stats.compilation.fileDependencies) {
-        // node modules  are handled by the dependency on package-lock.json
-        if (file.includes('/node_modules/'))
-            continue;
+  const inputs = new Set();
+  for (const file of stats.compilation.fileDependencies) {
+    // node modules  are handled by the dependency on package-lock.json
+    if (file.includes("/node_modules/")) continue;
 
-        // Webpack 5 includes directories: https://github.com/webpack/webpack/issues/11971
-        if (fs.lstatSync(file).isDirectory())
-            continue;
+    // Webpack 5 includes directories: https://github.com/webpack/webpack/issues/11971
+    if (fs.lstatSync(file).isDirectory()) continue;
 
-        inputs.add(path.relative(srcdir, file));
+    inputs.add(path.relative(srcdir, file));
+  }
+
+  const uncompressed_patterns = [
+    "/manifest.json$",
+    "/override.json$",
+    "^dist/static/", // cockpit-ws cannot currently serve compressed login page
+    "^dist/shell/index.html$", // COMPAT: Support older cockpit-ws binaries. See #14673
+    ".png$",
+    ".woff$",
+    ".woff2$",
+    ".gif$",
+  ].map((r) => new RegExp(r));
+
+  const outputs = new Set();
+  const installs = new Set();
+  const gz_installs = new Set();
+  const tests = new Set();
+  for (const asset in stats.compilation.assets) {
+    const output = path.join(dir, asset);
+    fs.utimesSync(output, now, now);
+
+    if (!output.endsWith("/manifest.json") && !output.endsWith(".map"))
+      outputs.add(output);
+
+    if (output.includes("/test-")) {
+      if (output.endsWith(".html")) {
+        tests.add(output);
+      }
+      continue;
     }
 
-    const uncompressed_patterns = [
-        '/manifest.json$', '/override.json$',
-        '^dist/static/', // cockpit-ws cannot currently serve compressed login page
-        '^dist/shell/index.html$',  // COMPAT: Support older cockpit-ws binaries. See #14673
-        '\.png$', '\.woff$', '\.woff2$', '\.gif$'
-    ].map((r) => new RegExp(r));
+    if (output.endsWith(".map") || output.endsWith(".LICENSE.txt")) continue;
 
-    const outputs = new Set();
-    const installs = new Set();
-    const gz_installs = new Set();
-    const tests = new Set();
-    for (const asset in stats.compilation.assets) {
-        const output = path.join(dir, asset);
-        fs.utimesSync(output, now, now);
-
-        if (!output.endsWith("/manifest.json") && !output.endsWith(".map"))
-            outputs.add(output);
-
-        if (output.includes("/test-")) {
-            if (output.endsWith(".html")) {
-                tests.add(output);
-            }
-            continue;
-        }
-
-        if (output.endsWith(".map") || output.endsWith(".LICENSE.txt"))
-            continue;
-
-        if (uncompressed_patterns.some((s) => output.match(s))) {
-            installs.add(output);
-        } else {
-            gz_installs.add(output);
-        }
+    if (uncompressed_patterns.some((s) => output.match(s))) {
+      installs.add(output);
+    } else {
+      gz_installs.add(output);
     }
+  }
 
-    const lines = [ "# Generated Makefile data for " + prefix ];
+  const lines = ["# Generated Makefile data for " + prefix];
 
-    function makeArray(name, set) {
-        lines.push(name + " = \\");
-        for (const value of [...set.keys()].sort()) {
-            lines.push("\t" + value + " \\");
-        }
-        lines.push("\t$(NULL)");
-        lines.push("");
+  function makeArray(name, set) {
+    lines.push(name + " = \\");
+    for (const value of [...set.keys()].sort()) {
+      lines.push("\t" + value + " \\");
     }
-
-    makeArray(prefix + "_INPUTS", inputs);
-    makeArray(prefix + "_OUTPUTS", outputs);
-
-    makeArray(prefix + "_INSTALL", installs);
-    makeArray(prefix + "_GZ_INSTALL", gz_installs);
-    makeArray(prefix + "_TESTS", tests);
-
-    lines.push(stampfile + ": $(" + prefix + "_INPUTS)");
+    lines.push("\t$(NULL)");
     lines.push("");
+  }
 
-    for (const name of [...outputs.keys()].sort()) {
-        lines.push(name + ": " + stampfile);
-        lines.push("")
-    }
+  makeArray(prefix + "_INPUTS", inputs);
+  makeArray(prefix + "_OUTPUTS", outputs);
 
-    for (const name of [...inputs.keys()].sort()) {
-        lines.push(name + ":");
-        lines.push("")
-    }
+  makeArray(prefix + "_INSTALL", installs);
+  makeArray(prefix + "_GZ_INSTALL", gz_installs);
+  makeArray(prefix + "_TESTS", tests);
 
-    lines.push("WEBPACK_INPUTS += $(" + prefix + "_INPUTS)");
-    lines.push("WEBPACK_OUTPUTS += $(" + prefix + "_OUTPUTS)");
-    lines.push("WEBPACK_INSTALL += $(" + prefix + "_INSTALL)");
-    lines.push("WEBPACK_GZ_INSTALL += $(" + prefix + "_GZ_INSTALL)");
-    lines.push("TESTS += $(" + prefix + "_TESTS)");
+  lines.push(stampfile + ": $(" + prefix + "_INPUTS)");
+  lines.push("");
+
+  for (const name of [...outputs.keys()].sort()) {
+    lines.push(name + ": " + stampfile);
     lines.push("");
+  }
 
-    lines.push(prefix + ": " + stampfile);
+  for (const name of [...inputs.keys()].sort()) {
+    lines.push(name + ":");
+    lines.push("");
+  }
 
-    fs.writeFileSync(makefile, lines.join("\n") + "\n");
+  lines.push("WEBPACK_INPUTS += $(" + prefix + "_INPUTS)");
+  lines.push("WEBPACK_OUTPUTS += $(" + prefix + "_OUTPUTS)");
+  lines.push("WEBPACK_INSTALL += $(" + prefix + "_INSTALL)");
+  lines.push("WEBPACK_GZ_INSTALL += $(" + prefix + "_GZ_INSTALL)");
+  lines.push("TESTS += $(" + prefix + "_TESTS)");
+  lines.push("");
+
+  lines.push(prefix + ": " + stampfile);
+
+  fs.writeFileSync(makefile, lines.join("\n") + "\n");
 }
 
 function rsync() {
-    const ret = child_process.spawnSync("rsync", ["--recursive", "--info=PROGRESS2", "--delete",
-                                        path.dirname(makefile), ops.rsync + ":/usr/share/cockpit/"],
-                                        { stdio: "inherit" });
-    if (ret.status !== 0)
-        process.exit(1);
+  const ret = child_process.spawnSync(
+    "rsync",
+    [
+      "--recursive",
+      "--info=PROGRESS2",
+      "--delete",
+      path.dirname(makefile),
+      ops.rsync + ":/usr/share/cockpit/",
+    ],
+    { stdio: "inherit" }
+  );
+  if (ret.status !== 0) process.exit(1);
 }
