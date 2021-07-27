@@ -1,4 +1,4 @@
-#!/home/xiepeng/.nvm/versions/node/v12.22.1/bin node
+#!/usr/bin/env node
 
 /*
  * This file is part of Cockpit.
